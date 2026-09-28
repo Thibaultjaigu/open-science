@@ -2,8 +2,9 @@ import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import * as processTree from '../process-tree'
 import * as powerShellParser from './powershell-search-parser'
+import * as windowsRuntime from './windows-notebook-runtime'
 import { ShellProcessOwnershipRegistry } from './shell-process-ownership.windows-posix'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -38,6 +39,55 @@ afterEach(async () => {
 const previewAvailable = (): boolean => true
 
 describe('notebook shell process behavior', () => {
+  it.each(['7.6', '5.1'] as const)(
+    'requires the bundled Node read grant only for PowerShell %s when preparing the sandbox',
+    async (version) => {
+      const root = join(portableRuntimeRoot, 'bundled')
+      const nodeRoot = join(root, 'node')
+      const hostTools = join(portableRuntimeRoot, 'host-tools')
+      await mkdir(hostTools)
+      const resolver = vi.spyOn(windowsRuntime, 'resolveWindowsNotebookRuntime').mockReturnValue({
+        root,
+        node: join(nodeRoot, 'node.exe'),
+        powershell: join(root, 'powershell', 'pwsh.exe')
+      })
+      const parser = vi
+        .spyOn(powerShellParser, 'parsePowerShellSearchCommands')
+        .mockResolvedValue([])
+      const admission = vi
+        .spyOn(processTree, 'assertProcessTreeSupport')
+        .mockImplementation(() => {})
+      const wrap = vi
+        .fn<NotebookProcessSandbox['wrap']>()
+        .mockRejectedValue(new Error('stop-before-spawn'))
+      try {
+        const result = await runShellCommand({
+          command: 'node --version',
+          cwd: portableRuntimeRoot,
+          handoffDir: portableRuntimeRoot,
+          runtimeRoot: join(portableRuntimeRoot, 'managed'),
+          environment: { PATH: hostTools },
+          sessionId: 'fixture-session',
+          projectId: 'fixture-project',
+          platform: 'win32',
+          runtimeBinding: { kind: 'powershell', version },
+          processSandbox: { wrap }
+        })
+        expect(result.stderr).toBe('stop-before-spawn')
+        expect(wrap).toHaveBeenCalledOnce()
+        const { filesystem } = wrap.mock.calls[0][0]
+        if (version === '7.6') expect(filesystem.readOnlyRoots).toContain(nodeRoot)
+        else expect(filesystem.readOnlyRoots).not.toContain(nodeRoot)
+        expect(filesystem.readOnlyRoots).not.toContain(hostTools)
+        expect(filesystem.optionalReadOnlyRoots).toContain(hostTools)
+      } finally {
+        resolver.mockRestore()
+        parser.mockRestore()
+        admission.mockRestore()
+      }
+    }
+  )
+
   it('returns application recovery facts when earlier cleanup blocks native preparation', async () => {
     const result = await runShellCommand({
       command: 'printf never-started',

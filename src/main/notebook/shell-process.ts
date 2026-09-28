@@ -387,6 +387,9 @@ const prepareShellLaunchOptions = async (
           filesystem: {
             readOnlyRoots: [
               options.runtimeRoot,
+              ...(runtimeBinding.kind === 'powershell' && runtimeBinding.version === '7.6'
+                ? [dirname(resolveWindowsNotebookRuntime().node)]
+                : []),
               ...(options.inputRoot ? [options.inputRoot] : []),
               ...(runtimeBinding.kind === 'wsl2-bash'
                 ? []
