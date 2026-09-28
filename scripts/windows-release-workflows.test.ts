@@ -71,11 +71,27 @@ describe('post-merge Windows validation', () => {
     ]
     for (const [file, jobId, consumer] of consumers) {
       const job = readWorkflow(file).jobs[jobId]
-      const setup = findStep(job, 'Prepare Windows Notebook runtime')
-      expect(setup.uses).toBe('./.github/actions/windows-notebook-runtime')
+      const setup = findStep(job, 'Download Windows Notebook runtime')
+      expect(setup.uses).toMatch(/^actions\/download-artifact@[0-9a-f]{40}$/)
+      expect(setup.with?.['artifact-ids']).toBe(
+        '${{ needs.windows_notebook_runtime.outputs.artifact_id }}'
+      )
+      expect(job.needs).toContain('windows_notebook_runtime')
+      expect(readWorkflow(file).jobs.windows_notebook_runtime.uses).toBe(
+        './.github/workflows/windows-notebook-runtime.yml'
+      )
       expect(setup['continue-on-error']).toBeUndefined()
       expect(job.steps!.indexOf(setup)).toBeLessThan(job.steps!.indexOf(findStep(job, consumer)))
     }
+    const compiler = readWorkflow('windows-notebook-runtime.yml').jobs.runtime
+    expect(compiler['runs-on']).toBe('windows-2022')
+    expect(compiler['timeout-minutes']).toBe(90)
+    expect(findStep(compiler, 'Prepare Windows Notebook runtime').uses).toBe(
+      './.github/actions/windows-notebook-runtime'
+    )
+    expect(findStep(compiler, 'Upload Windows Notebook runtime').with?.['if-no-files-found']).toBe(
+      'error'
+    )
     const action = load(
       readFileSync('.github/actions/windows-notebook-runtime/action.yml', 'utf8')
     ) as { runs: { steps: WorkflowStep[] } }
@@ -175,7 +191,7 @@ describe('post-merge Windows validation', () => {
       'timeout-minutes': 60
     })
     expect(dependencies).toMatchObject({
-      needs: 'plan',
+      needs: ['plan', 'windows_notebook_runtime'],
       'runs-on': 'windows-latest',
       outputs: {
         artifact_id: '${{ steps.upload.outputs.artifact-id }}',

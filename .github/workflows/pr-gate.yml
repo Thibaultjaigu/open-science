@@ -849,13 +849,17 @@ jobs:
           packages/notebook-network-sandbox/src/network-enforcement.integration.test.ts
           src/main/session-plan/plan-context-file.shell.integration.test.ts
 
+  windows_notebook_runtime:
+    needs: preflight
+    if: ${{ needs.preflight.result == 'success' && ((contains(fromJSON(needs.preflight.outputs.plan).lanes, 'windows_runtime') && inputs.dry_run != 'windows-process') || contains(fromJSON(needs.preflight.outputs.plan).bundles, 'windows_e2e')) }}
+    uses: ./.github/workflows/windows-notebook-runtime.yml
+
   windows_core:
     name: Windows core
-    needs: preflight
-    if: ${{ needs.preflight.result == 'success' && contains(fromJSON(needs.preflight.outputs.plan).bundles, 'windows_core') }}
+    needs: [preflight, windows_notebook_runtime]
+    if: ${{ !cancelled() && needs.preflight.result == 'success' && contains(fromJSON(needs.preflight.outputs.plan).bundles, 'windows_core') && (needs.windows_notebook_runtime.result == 'success' || needs.windows_notebook_runtime.result == 'skipped') }}
     runs-on: windows-latest
-    # Cold pinned Node/PowerShell source builds are cached; warm core checks retain their own bounds.
-    timeout-minutes: 180
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -868,9 +872,13 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: node scripts/ci/npm-ci.mjs
-      - name: Prepare Windows Notebook runtime
+      - name: Download Windows Notebook runtime
         if: ${{ contains(fromJSON(needs.preflight.outputs.plan).lanes, 'windows_runtime') && inputs.dry_run != 'windows-process' }}
-        uses: ./.github/actions/windows-notebook-runtime
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.windows_notebook_runtime.outputs.artifact_id }}
+          path: packages/notebook-network-sandbox/vendor/windows-runtime/x64
+          merge-multiple: true
       - name: Test delegated Windows process ownership
         if: ${{ contains(fromJSON(needs.preflight.outputs.plan).lanes, 'windows_runtime') }}
         run: >-
@@ -1052,10 +1060,10 @@ jobs:
 
   windows_e2e_setup:
     name: Prepare Windows E2E
-    needs: preflight
+    needs: [preflight, windows_notebook_runtime]
     if: ${{ needs.preflight.result == 'success' && contains(fromJSON(needs.preflight.outputs.plan).bundles, 'windows_e2e') }}
     runs-on: windows-latest
-    timeout-minutes: 180
+    timeout-minutes: 15
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       node_version: ${{ steps.node.outputs.node-version }}
@@ -1074,8 +1082,12 @@ jobs:
         run: node scripts/ci/npm-ci.mjs --prefer-offline --no-audit --fund=false
       - name: Build Electron application
         run: npm run build:e2e
-      - name: Prepare Windows Notebook runtime
-        uses: ./.github/actions/windows-notebook-runtime
+      - name: Download Windows Notebook runtime
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.windows_notebook_runtime.outputs.artifact_id }}
+          path: packages/notebook-network-sandbox/vendor/windows-runtime/x64
+          merge-multiple: true
       - name: Test snapshot transport
         run: npx vitest run scripts/ci/e2e-setup-snapshot.test.ts
       - name: Pack E2E setup

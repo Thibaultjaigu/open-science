@@ -25,12 +25,15 @@ Generated `x64/` is ignored and copied by electron-builder outside app.asar.
 `build.json` is written last; incomplete builds fail closed at runtime.
 The same staged directory is used by `npm run dev`.
 
-CI uses `.github/actions/windows-notebook-runtime` for packaging, Windows core,
-E2E setup, full-test dependency snapshots and resource probes. The cache is keyed
+CI builds once per workflow through `windows-notebook-runtime.yml` on
+`windows-2022` (VS 2022), using `.github/actions/windows-notebook-runtime`.
+Packaging, Windows core, E2E setup, full-test dependency snapshots and resource
+probes consume its artifact by ID. The cache is keyed
 by the pinned sources, patches and build script; restored binaries must pass
 version and npm startup checks. E2E/dependency snapshots already include this
 workspace package, so downstream jobs receive the same staged runtime.
-Cold source builds have a separate allowance in the Windows job timeout. Use
+Only the independent source-build job has a provisional 90-minute ceiling;
+existing test and packaging deadlines remain unchanged. Use
 PR Gate's `windows-notebook-runtime` dispatch mode to exercise the same preparation
 and Windows core checks without running unrelated portable or desktop suites.
 

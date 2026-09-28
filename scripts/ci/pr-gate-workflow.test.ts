@@ -1187,7 +1187,9 @@ describe('PR Gate workflow', () => {
       const producerId = `${bundle}_setup`
       const producer = workflow.jobs[producerId]
       const consumer = workflow.jobs[bundle]
-      expect(producer.needs).toBe('preflight')
+      expect(producer.needs).toEqual(
+        platform === 'windows' ? ['preflight', 'windows_notebook_runtime'] : 'preflight'
+      )
       if (platform === 'windows') {
         expect(producer.if).toBe(
           "${{ needs.preflight.result == 'success' && contains(fromJSON(needs.preflight.outputs.plan).bundles, 'windows_e2e') }}"
@@ -1626,7 +1628,7 @@ describe('PR Gate workflow', () => {
 
     expect(workflow.jobs.windows_core).toMatchObject({
       'runs-on': 'windows-latest',
-      'timeout-minutes': 180
+      'timeout-minutes': 30
     })
     const runtime = workflow.jobs.windows_core.steps?.find(
       ({ name }) => name === 'Test Windows-specific behavior'

@@ -294,20 +294,25 @@ jobs:
           fi
           echo "matrix={\"include\":$include}" >> "$GITHUB_OUTPUT"
 
+  windows_notebook_runtime:
+    needs: setup
+    if: ${{ needs.setup.result == 'success' && !inputs.mac_only && !inputs.verify_only && (inputs.platform_name == '' || inputs.platform_name == 'windows-x64') }}
+    uses: ./.github/workflows/windows-notebook-runtime.yml
+
   build:
     name: Build ${{ matrix.name }}
-    needs: setup
+    needs: [setup, windows_notebook_runtime]
     # Start as soon as the matrix is resolved. The sibling verify job remains part of this reusable
     # workflow's result, so release/nightly callers cannot reach publish if verification fails.
-    if: ${{ needs.setup.result == 'success' }}
+    if: ${{ !cancelled() && needs.setup.result == 'success' && (needs.windows_notebook_runtime.result == 'success' || needs.windows_notebook_runtime.result == 'skipped') }}
     runs-on: ${{ matrix.os }}
     environment: ${{ inputs.sign_windows && matrix.platform == 'win' && 'windows-signing' || '' }}
     permissions:
       contents: read
       id-token: write
     # Observed packaging legs: macOS 6–16 min (Intel renderer build is the slow one), Linux/Windows
-    # 6–12 min. Windows also needs room for a cold pinned Node/PowerShell source build.
-    timeout-minutes: ${{ matrix.platform == 'win' && 180 || matrix.platform == 'mac' && 45 || 30 }}
+    # 6–12 min. Generous ceilings still stop a hung electron-builder well before the 6 h default.
+    timeout-minutes: ${{ matrix.platform == 'mac' && 45 || 30 }}
     strategy:
       # Don't let one platform's failure cancel the others.
       fail-fast: false
@@ -423,9 +428,13 @@ jobs:
         if: ${{ matrix.platform == 'win' }}
         run: node packages/notebook-network-sandbox/vendor/windows/build.mjs x64
 
-      - name: Prepare Windows Notebook runtime
+      - name: Download Windows Notebook runtime
         if: ${{ matrix.platform == 'win' }}
-        uses: ./.github/actions/windows-notebook-runtime
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.windows_notebook_runtime.outputs.artifact_id }}
+          path: packages/notebook-network-sandbox/vendor/windows-runtime/x64
+          merge-multiple: true
 
       # electron-builder 26.15.3 creates its temporary keychain with a random password but invokes
       # `security set-key-partition-list -k` with the P12 password. macOS 26 Intel rejects that
