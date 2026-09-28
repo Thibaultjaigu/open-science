@@ -42,6 +42,7 @@ import { NotebookHelperModuleHost } from './helper-module-host'
 import { NotebookNetworkSandboxOwner } from './network-sandbox-owner'
 import { DEFAULT_NOTEBOOK_NETWORK_SETTINGS } from '../../shared/notebook-network'
 import { KernelProcessLifecycleOwner } from './kernel-process-lifecycle.windows-posix'
+import * as windowsNotebookRuntime from './windows-notebook-runtime'
 
 // -- TimeoutController: pure state machine, driven with fake timers + a signal recorder. ------------
 
@@ -5258,6 +5259,15 @@ describe('NotebookKernelExecutor repl kind (real repl_loop.js)', () => {
   })
 
   it('preserves the Windows repl main module without widening sandbox access', async () => {
+    // This portable adapter test substitutes an ordinary test Node; native isolation is exercised
+    // separately by windows-notebook-runtime.integration.test.ts with the patched binaries.
+    const runtime = vi
+      .spyOn(windowsNotebookRuntime, 'resolveWindowsNotebookRuntime')
+      .mockReturnValue({
+        root: dirname(process.execPath),
+        node: process.execPath,
+        powershell: 'C:\\runtime\\pwsh.exe'
+      })
     cwdDir = await mkdtemp(join(tmpdir(), 'os-kernel-repl-windows-main-'))
     const cleanup = vi.fn()
     const wrap = vi.fn<NotebookProcessSandbox['wrap']>(async (invocation) => ({
@@ -5285,10 +5295,14 @@ describe('NotebookKernelExecutor repl kind (real repl_loop.js)', () => {
 
       expect(result.status, result.stderr || result.traceback).toBe('completed')
       expect(wrap).toHaveBeenCalledWith(
-        expect.objectContaining({ args: ['--preserve-symlinks-main', REPL_LOOP] })
+        expect.objectContaining({
+          executable: process.execPath,
+          args: ['--preserve-symlinks-main', REPL_LOOP]
+        })
       )
     } finally {
       await executor.shutdown()
+      runtime.mockRestore()
     }
   })
 

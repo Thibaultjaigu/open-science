@@ -423,6 +423,19 @@ jobs:
         if: ${{ matrix.platform == 'win' }}
         run: node packages/notebook-network-sandbox/vendor/windows/build.mjs x64
 
+      - name: Cache Windows Notebook runtime
+        if: ${{ matrix.platform == 'win' }}
+        id: windows-notebook-runtime
+        uses: actions/cache@v4
+        with:
+          path: packages/notebook-network-sandbox/vendor/windows-runtime/x64
+          key: windows-notebook-runtime-x64-${{ hashFiles('packages/notebook-network-sandbox/vendor/windows-runtime/sources.json', 'packages/notebook-network-sandbox/vendor/windows-runtime/*.patch', 'packages/notebook-network-sandbox/vendor/windows-runtime/build.ps1') }}
+
+      - name: Build Windows Notebook runtime
+        if: ${{ matrix.platform == 'win' && steps.windows-notebook-runtime.outputs.cache-hit != 'true' }}
+        shell: pwsh
+        run: ./packages/notebook-network-sandbox/vendor/windows-runtime/build.ps1 -BuildRoot "$env:RUNNER_TEMP/os-runtime"
+
       # electron-builder 26.15.3 creates its temporary keychain with a random password but invokes
       # `security set-key-partition-list -k` with the P12 password. macOS 26 Intel rejects that
       # mismatch with SecKeychainUnlock. Import the certificate ourselves with the correct password

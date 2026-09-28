@@ -64,6 +64,7 @@ describe('PowerShell search admission contract', () => {
     await expect(
       adapter.prepare({
         command: 'fixture source',
+        runtimeBinding: { kind: 'powershell', version: '5.1' },
         cwd,
         handoffDir: cwd,
         runtimeRoot: root,
@@ -92,6 +93,7 @@ describe('PowerShell search admission contract', () => {
     await expect(
       adapter.prepare({
         command: 'fixture source',
+        runtimeBinding: { kind: 'powershell', version: '5.1' },
         cwd,
         handoffDir: cwd,
         runtimeRoot: root,

@@ -184,7 +184,9 @@
     "src/main/notebook/windows-micromamba-runner.ts",
     "src/main/notebook/windows-micromamba-working-cache.ts",
     "src/main/notebook/windows-runtime-binding.ts",
-    "src/main/notebook/wsl2-scheduling.integration.test.ts"
+    "src/main/notebook/wsl2-scheduling.integration.test.ts",
+    "src/main/notebook/windows-notebook-runtime.ts",
+    "src/main/notebook/windows-notebook-runtime.test.ts"
   ],
   "interfacePaths": [
     "src/main/notebook/configured-shell-runtime.ts",
@@ -339,7 +341,8 @@
       "src/main/notebook/shell-runtime.test.ts",
       "src/main/notebook/windows-first-r-access.integration.test.ts",
       "src/main/notebook/windows-micromamba-runner.test.ts",
-      "src/main/notebook/wsl2-scheduling.integration.test.ts"
+      "src/main/notebook/wsl2-scheduling.integration.test.ts",
+      "src/main/notebook/windows-notebook-runtime.test.ts"
     ],
     "contract": [
       "src/preload/index.test.ts",
