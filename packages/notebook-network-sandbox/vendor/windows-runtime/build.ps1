@@ -20,12 +20,22 @@ if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker }
 
 function Get-Source($source, [string]$name) {
     $archive = Join-Path $BuildRoot $name
-    if (!(Test-Path -LiteralPath $archive)) { Invoke-WebRequest -Uri $source.url -OutFile $archive }
+    $candidate = $archive
+    if (!(Test-Path -LiteralPath $archive)) {
+        $candidate = "$archive.download"
+        Write-Host "Downloading $name from $($source.url)"
+        # Bound the entire transfer as well as connection setup. A stalled upstream must not
+        # consume the compiler's job budget. Incomplete downloads never become reusable archives.
+        & curl.exe --disable --fail --location --silent --show-error --connect-timeout 30 --max-time 300 --retry 2 --retry-delay 2 --retry-max-time 600 --output $candidate $source.url
+        if ($LASTEXITCODE -ne 0) { throw "Source download failed: $name (curl exit $LASTEXITCODE)" }
+    }
     $algorithm = if ($source.sha512) { 'SHA512' } else { 'SHA256' }
     $expected = if ($source.sha512) { $source.sha512 } else { $source.sha256 }
-    if ((Get-FileHash -LiteralPath $archive -Algorithm $algorithm).Hash -ne $expected) {
+    Write-Host "Verifying $name"
+    if ((Get-FileHash -LiteralPath $candidate -Algorithm $algorithm).Hash -ne $expected) {
         throw "Source checksum mismatch: $name"
     }
+    if ($candidate -ne $archive) { Move-Item -LiteralPath $candidate -Destination $archive }
     return $archive
 }
 
@@ -47,12 +57,15 @@ if (!$SkipNode) {
     $archive = Get-Source $sources.node 'node.tar.xz'
     $source = Join-Path $BuildRoot "node-v$($sources.node.version)"
     if (!(Test-Path -LiteralPath $source)) {
+        Write-Host 'Extracting Node source'
         & tar -xf $archive -C $BuildRoot
         if ($LASTEXITCODE -ne 0) { throw 'Node source extraction failed' }
     }
+    Write-Host 'Applying Node patch'
     Apply-Patch $source (Join-Path $PSScriptRoot 'node-appcontainer.patch')
     Push-Location $source
     try {
+        Write-Host 'Building Node'
         $env:msbuild_args = '/m:1 /p:MultiProcMaxCount=2 /p:MultiProcessorCompilation=false /p:CL_MPCount=1'
         & .\vcbuild.bat x64 vs2022 no-cctest openssl-no-asm
         if ($LASTEXITCODE -ne 0) { throw 'Node build failed' }
@@ -71,13 +84,16 @@ if (!$SkipPowerShell) {
     $archive = Get-Source $sources.powershell 'powershell.tar.gz'
     $source = Join-Path $BuildRoot "PowerShell-$($sources.powershell.version)"
     if (!(Test-Path -LiteralPath $source)) {
+        Write-Host 'Extracting PowerShell source'
         & tar -xf $archive -C $BuildRoot
         if ($LASTEXITCODE -ne 0) { throw 'PowerShell source extraction failed' }
     }
+    Write-Host 'Applying PowerShell patch'
     Apply-Patch $source (Join-Path $PSScriptRoot 'powershell-appcontainer.patch')
     $sdkArchive = Get-Source $sources.dotnet 'dotnet.zip'
     $sdk = Join-Path $BuildRoot 'dotnet'
     if (!(Test-Path -LiteralPath (Join-Path $sdk 'dotnet.exe'))) {
+        Write-Host 'Extracting .NET SDK'
         Expand-Archive -LiteralPath $sdkArchive -DestinationPath $sdk
     }
     $env:DOTNET_CLI_HOME = $BuildRoot
@@ -87,6 +103,7 @@ if (!$SkipPowerShell) {
     $env:PATH = "$sdk;$env:PATH"
     Push-Location $source
     try {
+        Write-Host 'Building PowerShell'
         Import-Module ./build.psm1
         Start-PSBuild -Configuration Release -Runtime win7-x64 -ReleaseTag "v$($sources.powershell.version)" -NoPSModuleRestore -Output (Join-Path $stage 'powershell')
     } finally { Pop-Location }

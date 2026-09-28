@@ -1,6 +1,9 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { load } from 'js-yaml'
 import { describe, expect, it } from 'vitest'
@@ -60,6 +63,55 @@ const findStep = (job: WorkflowJob, name: string): WorkflowStep => {
 }
 
 describe('post-merge Windows validation', () => {
+  it.skipIf(process.platform !== 'win32')(
+    'promotes only verified runtime source downloads and rejects failed transfers',
+    () => {
+      const directory = mkdtempSync(join(tmpdir(), 'runtime-source-'))
+      const fixture = join(directory, 'fixture.txt')
+      const content = 'offline runtime source fixture'
+      writeFileSync(fixture, content)
+      const quote = (value: string): string => `'${value.replaceAll("'", "''")}'`
+      const buildScript = join(
+        process.cwd(),
+        'packages/notebook-network-sandbox/vendor/windows-runtime/build.ps1'
+      )
+      try {
+        const result = spawnSync(
+          'pwsh.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$ErrorActionPreference = 'Stop'
+             $BuildRoot = ${quote(directory)}
+             $ast = [Management.Automation.Language.Parser]::ParseFile(${quote(buildScript)}, [ref]$null, [ref]$null)
+             $function = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-Source' }, $true)
+             . ([scriptblock]::Create($function.Extent.Text))
+             $source = @{ url = ${quote(pathToFileURL(fixture).href)}; sha256 = '${createHash('sha256').update(content).digest('hex')}' }
+             $archive = Get-Source $source 'valid.txt'
+             if ((Get-Content -Raw $archive) -ne ${quote(content)}) { throw 'Verified content differs' }
+             if (Test-Path "$archive.download") { throw 'Verified download was not promoted' }
+             $source.sha256 = 'invalid'
+             try { Get-Source $source 'corrupt.txt'; throw 'Accepted corrupt source' }
+             catch { if ($_.Exception.Message -notlike 'Source checksum mismatch:*') { throw } }
+             if (Test-Path (Join-Path $BuildRoot 'corrupt.txt')) { throw 'Corrupt source was promoted' }
+             $source.url = ${quote(pathToFileURL(join(directory, 'missing.txt')).href)}
+             try { Get-Source $source 'failed.txt'; throw 'Accepted failed transfer' }
+             catch { if ($_.Exception.Message -notlike 'Source download failed:*') { throw } }
+             if (Test-Path (Join-Path $BuildRoot 'failed.txt')) { throw 'Failed transfer was promoted' }
+             exit 0`
+          ],
+          { encoding: 'utf8', windowsHide: true, timeout: 15_000 }
+        )
+        expect(result.error, result.stderr).toBeUndefined()
+        expect(result.status, result.stderr).toBe(0)
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
+    },
+    20_000
+  )
+
   it('prepares the bundled runtime before Windows consumers and snapshot publication', () => {
     const consumers = [
       ['build.yml', 'build', 'Build & package'],

@@ -13,7 +13,7 @@ AppContainer remains the execution boundary. It requires two runtime repairs:
 
 `sources.json` pins upstream source and portable SDK archive checksums. The two
 patches are the complete runtime source delta. Build using PowerShell 7, Python 3,
-Git, and Visual Studio 2022 C++ Build Tools:
+Git, Windows' `curl.exe`, and Visual Studio 2022 C++ Build Tools:
 
 ```powershell
 pwsh -File packages/notebook-network-sandbox/vendor/windows-runtime/build.ps1 -BuildRoot C:\os-runtime-build
@@ -21,6 +21,9 @@ pwsh -File packages/notebook-network-sandbox/vendor/windows-runtime/build.ps1 -B
 
 Use a dedicated short build directory. No global SDK, drive, ACL, shell or Node
 configuration is changed. The build retains Node/npm and PowerShell licenses.
+Source transfers have connection and whole-transfer deadlines with bounded retries;
+only checksum-verified downloads become reusable archives. Preparation and compiler
+phases log their start so a stalled download is distinguishable from a slow build.
 Generated `x64/` is ignored and copied by electron-builder outside app.asar.
 `build.json` is written last; incomplete builds fail closed at runtime.
 The same staged directory is used by `npm run dev`.
