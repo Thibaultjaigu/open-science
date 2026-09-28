@@ -56,6 +56,24 @@ partially patched installation. See the upstream
 
 ### Run in development
 
+On Windows x64, prepare the bundled Notebook runtime once after installing dependencies.
+Install PowerShell 7, Python 3, Git, and Visual Studio 2022 C++ Build Tools first;
+the build also uses Windows' `curl.exe`. From the repository root, run:
+
+```powershell
+pwsh -File packages/notebook-network-sandbox/vendor/windows-runtime/build.ps1 -BuildRoot C:\os-runtime-build
+```
+
+Use a dedicated short build directory. The command downloads checksum-pinned sources
+and builds the patched Node/PowerShell executables into the ignored workspace runtime
+directory. The first build can take substantial time. Repeat it when the pinned sources
+or runtime patches change. See the [runtime build notes](packages/notebook-network-sandbox/vendor/windows-runtime/README.md).
+`npm install` does not perform this source build. `dev`, `dev:web`, and `dev:headless`
+check the required runtime files and versions before starting and report this setup
+command if preparation is missing or incomplete. macOS and Linux skip this check.
+
+After preparation, start development normally:
+
 ```bash
 npm run dev
 ```
