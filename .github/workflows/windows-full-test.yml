@@ -61,7 +61,7 @@ jobs:
     needs: plan
     if: ${{ needs.plan.outputs.should_test == 'true' && (github.event_name != 'workflow_dispatch' || inputs.mode == 'full' || inputs.mode == 'regressions' || inputs.mode == 'scheduled-fixes' || inputs.mode == 'notebook-mutation') }}
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 180
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       node_version: ${{ steps.node.outputs.node-version }}
@@ -78,6 +78,8 @@ jobs:
           package-manager-cache: false
       - name: Install dependencies
         run: node scripts/ci/npm-ci.mjs
+      - name: Prepare Windows Notebook runtime
+        uses: ./.github/actions/windows-notebook-runtime
       - name: Pack dependencies
         # Windows defaults to pwsh, which does not expand $RUNNER_TEMP. Pack into the same
         # runner.temp directory that upload-artifact reads, matching PR Gate's Windows E2E setup.

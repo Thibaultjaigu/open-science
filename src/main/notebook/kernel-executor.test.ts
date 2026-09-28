@@ -17,7 +17,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve, win32 } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   kernelExecutableReadRoot,
@@ -371,6 +371,16 @@ const baseRequest = (
   inputRoot: join(cwd, 'inputs'),
   dataRoot: join(cwd, 'nb', 'data'),
   runtimeRoot: join(cwd, 'runtime')
+})
+
+beforeEach(() => {
+  // OS-adapter tests simulate Windows on every host. Native runtime isolation is covered by
+  // windows-notebook-runtime.integration.test.ts; these protocol children use the test host Node.
+  vi.spyOn(windowsNotebookRuntime, 'resolveWindowsNotebookRuntime').mockReturnValue({
+    root: dirname(process.execPath),
+    node: process.execPath,
+    powershell: 'C:\\runtime\\pwsh.exe'
+  })
 })
 
 afterEach(async () => {

@@ -25,6 +25,15 @@ Generated `x64/` is ignored and copied by electron-builder outside app.asar.
 `build.json` is written last; incomplete builds fail closed at runtime.
 The same staged directory is used by `npm run dev`.
 
+CI uses `.github/actions/windows-notebook-runtime` for packaging, Windows core,
+E2E setup, full-test dependency snapshots and resource probes. The cache is keyed
+by the pinned sources, patches and build script; restored binaries must pass
+version and npm startup checks. E2E/dependency snapshots already include this
+workspace package, so downstream jobs receive the same staged runtime.
+Cold source builds have a separate allowance in the Windows job timeout. Use
+PR Gate's `windows-notebook-runtime` dispatch mode to exercise the same preparation
+and Windows core checks without running unrelated portable or desktop suites.
+
 Notebook children receive Node's standard `--preserve-symlinks` and
 `--preserve-symlinks-main` options. This extends the REPL's existing entry-point
 handling to npm and descendant Node processes: module loading must not enumerate

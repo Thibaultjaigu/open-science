@@ -270,7 +270,7 @@ describe('release and scheduled workflow topology', () => {
       needs: 'plan',
       if: "needs.plan.outputs.should_test == 'true' && inputs.mode != 'package-macos-arm64'",
       'runs-on': 'windows-latest',
-      'timeout-minutes': 70
+      'timeout-minutes': 240
     })
     expect(profile.run).toContain("'--stress-cycles=1'")
     expect(profile.run).toContain("'--stress-cycles=6'")
@@ -882,7 +882,9 @@ describe('build verification throughput', () => {
     })
     expect(build.jobs.verify['timeout-minutes']).toBe(15)
     expect(build.jobs.setup['timeout-minutes']).toBe(5)
-    expect(build.jobs.build['timeout-minutes']).toBe("${{ matrix.platform == 'mac' && 45 || 30 }}")
+    expect(build.jobs.build['timeout-minutes']).toBe(
+      "${{ matrix.platform == 'win' && 180 || matrix.platform == 'mac' && 45 || 30 }}"
+    )
     expect(regression.jobs.source['timeout-minutes']).toBe(5)
     expect(release.jobs['release-preflight']['timeout-minutes']).toBe(5)
     expect(release.jobs.publish['timeout-minutes']).toBe(15)

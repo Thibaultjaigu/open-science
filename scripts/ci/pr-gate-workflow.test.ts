@@ -533,6 +533,7 @@ describe('PR Gate workflow', () => {
             'windows-e2e',
             'windows-e2e-mainline',
             'windows-process',
+            'windows-notebook-runtime',
             'e2e',
             'source-regressions',
             'macos-smoke'
@@ -1414,7 +1415,8 @@ describe('PR Gate workflow', () => {
       ['policy', 'windows_e2e'],
       ['policy', 'e2e_functional_windows', 'e2e_workspace_windows', 'e2e_browser_windows']
     ],
-    ['windows-process', ['policy', 'windows_core'], ['policy', 'windows_runtime']]
+    ['windows-process', ['policy', 'windows_core'], ['policy', 'windows_runtime']],
+    ['windows-notebook-runtime', ['policy', 'windows_core'], ['policy', 'windows_runtime']]
   ])(
     'executes the focused %s plan through the real preflight script',
     (dryRunMode, bundles, lanes) => {
@@ -1624,7 +1626,7 @@ describe('PR Gate workflow', () => {
 
     expect(workflow.jobs.windows_core).toMatchObject({
       'runs-on': 'windows-latest',
-      'timeout-minutes': 30
+      'timeout-minutes': 180
     })
     const runtime = workflow.jobs.windows_core.steps?.find(
       ({ name }) => name === 'Test Windows-specific behavior'

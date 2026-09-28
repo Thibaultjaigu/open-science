@@ -306,8 +306,8 @@ jobs:
       contents: read
       id-token: write
     # Observed packaging legs: macOS 6–16 min (Intel renderer build is the slow one), Linux/Windows
-    # 6–12 min. Generous ceilings still stop a hung electron-builder well before the 6 h default.
-    timeout-minutes: ${{ matrix.platform == 'mac' && 45 || 30 }}
+    # 6–12 min. Windows also needs room for a cold pinned Node/PowerShell source build.
+    timeout-minutes: ${{ matrix.platform == 'win' && 180 || matrix.platform == 'mac' && 45 || 30 }}
     strategy:
       # Don't let one platform's failure cancel the others.
       fail-fast: false
@@ -423,18 +423,9 @@ jobs:
         if: ${{ matrix.platform == 'win' }}
         run: node packages/notebook-network-sandbox/vendor/windows/build.mjs x64
 
-      - name: Cache Windows Notebook runtime
+      - name: Prepare Windows Notebook runtime
         if: ${{ matrix.platform == 'win' }}
-        id: windows-notebook-runtime
-        uses: actions/cache@v4
-        with:
-          path: packages/notebook-network-sandbox/vendor/windows-runtime/x64
-          key: windows-notebook-runtime-x64-${{ hashFiles('packages/notebook-network-sandbox/vendor/windows-runtime/sources.json', 'packages/notebook-network-sandbox/vendor/windows-runtime/*.patch', 'packages/notebook-network-sandbox/vendor/windows-runtime/build.ps1') }}
-
-      - name: Build Windows Notebook runtime
-        if: ${{ matrix.platform == 'win' && steps.windows-notebook-runtime.outputs.cache-hit != 'true' }}
-        shell: pwsh
-        run: ./packages/notebook-network-sandbox/vendor/windows-runtime/build.ps1 -BuildRoot "$env:RUNNER_TEMP/os-runtime"
+        uses: ./.github/actions/windows-notebook-runtime
 
       # electron-builder 26.15.3 creates its temporary keychain with a random password but invokes
       # `security set-key-partition-list -k` with the P12 password. macOS 26 Intel rejects that

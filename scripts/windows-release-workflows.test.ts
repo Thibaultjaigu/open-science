@@ -60,6 +60,39 @@ const findStep = (job: WorkflowJob, name: string): WorkflowStep => {
 }
 
 describe('post-merge Windows validation', () => {
+  it('prepares the bundled runtime before Windows consumers and snapshot publication', () => {
+    const consumers = [
+      ['build.yml', 'build', 'Build & package'],
+      ['pr-gate.yml', 'windows_core', 'Test Windows notebook shell behavior'],
+      ['pr-gate.yml', 'windows_e2e_setup', 'Pack E2E setup'],
+      ['windows-e2e-regression.yml', 'windows_e2e_setup', 'Pack E2E setup'],
+      ['windows-full-test.yml', 'windows_dependencies', 'Pack dependencies'],
+      ['runtime-resource-soak.yml', 'runtime_resource_soak', 'Record runtime resource profile']
+    ]
+    for (const [file, jobId, consumer] of consumers) {
+      const job = readWorkflow(file).jobs[jobId]
+      const setup = findStep(job, 'Prepare Windows Notebook runtime')
+      expect(setup.uses).toBe('./.github/actions/windows-notebook-runtime')
+      expect(setup['continue-on-error']).toBeUndefined()
+      expect(job.steps!.indexOf(setup)).toBeLessThan(job.steps!.indexOf(findStep(job, consumer)))
+    }
+    const action = load(
+      readFileSync('.github/actions/windows-notebook-runtime/action.yml', 'utf8')
+    ) as { runs: { steps: WorkflowStep[] } }
+    const cache = action.runs.steps.find(({ id }) => id === 'runtime')!
+    expect(cache.uses).toMatch(/^actions\/cache@[0-9a-f]{40}$/)
+    for (const input of ['sources.json', '*.patch', 'build.ps1']) {
+      expect(cache.with?.key).toContain(input)
+    }
+    const build = action.runs.steps.find(({ name }) => name === 'Build Windows Notebook runtime')!
+    expect(build.if).toContain("cache-hit != 'true'")
+    expect(build.run).toContain('vendor/windows-runtime/build.ps1')
+    const verify = action.runs.steps.find(({ name }) => name === 'Verify Windows Notebook runtime')!
+    expect(verify.if).toBeUndefined()
+    for (const executable of ['node.exe', 'pwsh.exe', 'npm-cli.js'])
+      expect(verify.run).toContain(executable)
+  })
+
   it('blocks packaging on native data-location upgrade checks for every target OS', () => {
     const job = readWorkflow('build.yml').jobs.build
     const steps = job.steps ?? []

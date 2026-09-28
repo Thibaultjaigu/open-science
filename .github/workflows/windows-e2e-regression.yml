@@ -47,7 +47,7 @@ jobs:
     needs: plan
     if: ${{ needs.plan.outputs.should_test == 'true' }}
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 180
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       node_version: ${{ steps.node.outputs.node-version }}
@@ -66,6 +66,8 @@ jobs:
         run: node scripts/ci/npm-ci.mjs --prefer-offline --no-audit --fund=false
       - name: Build Electron application
         run: npm run build:e2e
+      - name: Prepare Windows Notebook runtime
+        uses: ./.github/actions/windows-notebook-runtime
       - name: Test snapshot transport
         run: npx vitest run scripts/ci/e2e-setup-snapshot.test.ts
       - name: Pack E2E setup

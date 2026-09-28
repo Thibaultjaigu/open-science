@@ -51,7 +51,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.should_test == 'true' && inputs.mode != 'package-macos-arm64'
     runs-on: windows-latest
-    timeout-minutes: 70
+    timeout-minutes: 240
     env:
       CI: 'true'
       PROFILE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'soak' }}
@@ -67,6 +67,9 @@ jobs:
 
       - name: Install dependencies
         run: node scripts/ci/npm-ci.mjs
+
+      - name: Prepare Windows Notebook runtime
+        uses: ./.github/actions/windows-notebook-runtime
 
       - name: Record runtime resource profile
         shell: pwsh
